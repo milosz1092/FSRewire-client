@@ -8,8 +8,37 @@ use std::fs;
 
 use encoding::{DecoderTrap, EncoderTrap};
 
-use quick_xml::events::Event;
-use quick_xml::reader::Reader;
+#[derive(Debug, Deserialize, Serialize)]
+struct SimConnectComm {
+    #[serde(rename = "Descr")]
+    description: String,
+    #[serde(rename = "Protocol")]
+    protocol: String,
+    #[serde(rename = "Scope")]
+    scope: String,
+    #[serde(rename = "Port")]
+    port: String,
+    #[serde(rename = "MaxClients")]
+    max_clients: String,
+    #[serde(rename = "MaxRecvSize")]
+    max_recv_size: String,
+    #[serde(default, rename = "Address")]
+    address: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct SimBaseDocument {
+    #[serde(rename = "Type")]
+    document_type: String,
+    #[serde(rename = "version")]
+    version: String,
+    #[serde(rename = "Descr")]
+    description: String,
+    #[serde(rename = "Filename")]
+    filename: String,
+    #[serde(rename = "SimConnect.Comm")]
+    simconnect_comm: Vec<SimConnectComm>,
+}
 
 static SERVER_ADDR: &str = "0.0.0.0";
 static SERVER_PORT: &str = "500";
@@ -74,59 +103,53 @@ fn update_simconnect_config() -> Result<(String, String), String> {
     let xml_file_path = get_simconnect_xml_path();
 
     let xml_content = read_windows1252_file(&xml_file_path)?;
-    // let xml_content = xml_content.replace("Windows-1252", "UTF-8");
+    let xml_content = xml_content.replace("Windows-1252", "UTF-8");
 
-    let mut reader = Reader::from_str(&xml_content);
+    let mut config: SimBaseDocument = serde_xml_rs::from_str(&xml_content)
+        .map_err(|e| format!("Error parsing SimConnect.xml: {}", e))?;
 
-    let mut paths: Vec<Vec<String>> = Vec::new();
-    let mut buf = Vec::new();
+    let mut ipv4_address = String::new();
+    let mut ipv4_port = String::new();
+    let mut ipv4_found = false;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-            Ok(Event::Eof) => break,
-
-            Ok(Event::Start(e)) => {
-                let path_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                let last_path = paths.last_mut();
-
-                match last_path {
-                    Some(path) => path.push(path_name),
-                    None => {
-                        let mut first_path = Vec::new();
-                        first_path.push(path_name);
-                        paths.push(first_path);
-                    }
-                }
-            }
-
-            Ok(Event::End(_)) => {
-                println!("paths size {}", paths.len());
-                let last_path = paths.last_mut();
-
-                if let Some(path) = last_path {
-                    if !path.is_empty() {
-                        path.pop();
-                    } else {
-                        paths.push(Vec::new());
-                    }
-                }
-            }
-
-            _ => (),
+    for comm_section in &mut config.simconnect_comm {
+        if comm_section.protocol == "IPv4" && !comm_section.description.contains("Dynamic") {
+            println!("IPv4 section found");
+            ipv4_address = comm_section.address.clone();
+            ipv4_port = comm_section.port.clone();
+            ipv4_found = true;
+            break;
         }
-
-        buf.clear();
     }
 
-    // Print paths
-    println!("Formatted Path: {:#?}", paths);
+    if ipv4_address.ne(SERVER_ADDR) {
+        ipv4_address = SERVER_ADDR.to_string();
+    }
 
-    let xml_new_content = xml_content.replace("UTF-8", "Windows-1252");
+    if ipv4_port.is_empty() {
+        ipv4_port = SERVER_PORT.to_string();
+    }
 
-    write_windows1252_file(&xml_file_path, &xml_new_content)?;
+    if !ipv4_found {
+        // Add the IPv4 section with the default values if it doesn't exist
+        config.simconnect_comm.push(SimConnectComm {
+            protocol: "IPv4".to_string(),
+            address: ipv4_address.clone(),
+            port: ipv4_port.clone(),
+            description: "Static IP4 port".to_string(),
+            scope: "local".to_string(),
+            max_clients: "64".to_string(),
+            max_recv_size: "4188".to_string(),
+        });
 
-    Ok(("none".to_string(), "none".to_string()))
+        // Save the modified XML content back to the file
+        let encoded_xml_content = serde_xml_rs::to_string(&config)
+            .map_err(|e| format!("Error encoding SimBaseDocument to XML: {}", e))?;
+
+        // write_windows1252_file(&xml_file_path, &encoded_xml_content)?;
+    }
+
+    Ok((ipv4_address, ipv4_port))
 }
 
 fn main() {
