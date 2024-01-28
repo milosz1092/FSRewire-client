@@ -3,10 +3,14 @@ use dirs;
 #[macro_use]
 extern crate serde_derive;
 extern crate encoding;
+extern crate quick_xml;
 
 use std::fs;
 
 use encoding::{DecoderTrap, EncoderTrap};
+
+use quick_xml::de::from_str as xml_from_string;
+use quick_xml::se::to_string as xml_to_string;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SimConnectComm {
@@ -36,17 +40,12 @@ struct SimBaseDocument {
     description: String,
     #[serde(rename = "Filename")]
     filename: String,
-    #[serde(rename = "SimConnect.Comm")]
+    #[serde(rename = "SimConnect.Comm", default)]
     simconnect_comm: Vec<SimConnectComm>,
 }
 
 static SERVER_ADDR: &str = "0.0.0.0";
 static SERVER_PORT: &str = "500";
-
-fn check_if_msfs_running() -> bool {
-    /* Opened SimConnect pipe indicates that MSFS2020 is running */
-    fs::metadata("\\\\.\\pipe\\Microsoft Flight Simulator\\SimConnect").is_ok()
-}
 
 fn read_windows1252_file(file_path: &str) -> Result<String, String> {
     let content =
@@ -65,6 +64,11 @@ fn write_windows1252_file(file_path: &str, content: &str) -> Result<(), String> 
             .map_err(|e| format!("Error writing SimConnect.xml: {}", e)),
         Err(err) => Err(format!("Error encoding content to Windows-1252: {}", err)),
     }
+}
+
+fn check_if_msfs_running() -> bool {
+    /* Opened SimConnect pipe indicates that MSFS2020 is running */
+    fs::metadata("\\\\.\\pipe\\Microsoft Flight Simulator\\SimConnect").is_ok()
 }
 
 fn get_simconnect_xml_path() -> String {
@@ -105,7 +109,7 @@ fn update_simconnect_config() -> Result<(String, String), String> {
     let xml_content = read_windows1252_file(&xml_file_path)?;
     let xml_content = xml_content.replace("Windows-1252", "UTF-8");
 
-    let mut config: SimBaseDocument = serde_xml_rs::from_str(&xml_content)
+    let mut config: SimBaseDocument = xml_from_string(&xml_content)
         .map_err(|e| format!("Error parsing SimConnect.xml: {}", e))?;
 
     let mut ipv4_address = String::new();
@@ -142,11 +146,14 @@ fn update_simconnect_config() -> Result<(String, String), String> {
             max_recv_size: "4188".to_string(),
         });
 
+        println!("config: {:#?}", &config);
+
         // Save the modified XML content back to the file
-        let encoded_xml_content = serde_xml_rs::to_string(&config)
+        let encoded_xml_content = xml_to_string(&config)
             .map_err(|e| format!("Error encoding SimBaseDocument to XML: {}", e))?;
 
-        // write_windows1252_file(&xml_file_path, &encoded_xml_content)?;
+        let encoded_xml_content = encoded_xml_content.replace("UTF-8", "Windows-1252");
+        write_windows1252_file(&xml_file_path, &encoded_xml_content)?;
     }
 
     Ok((ipv4_address, ipv4_port))
