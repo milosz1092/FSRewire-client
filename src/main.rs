@@ -1,4 +1,6 @@
 use dirs;
+use serde::Serialize;
+use serde::Serializer;
 
 #[macro_use]
 extern crate serde_derive;
@@ -11,6 +13,7 @@ use encoding::{DecoderTrap, EncoderTrap};
 
 use quick_xml::de::from_str as xml_from_string;
 use quick_xml::se::to_string as xml_to_string;
+use quick_xml::se::Serializer as XmlSerializer;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SimConnectComm {
@@ -32,9 +35,9 @@ struct SimConnectComm {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SimBaseDocument {
-    #[serde(rename = "Type")]
+    #[serde(rename = "@Type")]
     document_type: String,
-    #[serde(rename = "version")]
+    #[serde(rename = "@version")]
     version: String,
     #[serde(rename = "Descr")]
     description: String,
@@ -146,14 +149,22 @@ fn update_simconnect_config() -> Result<(String, String), String> {
             max_recv_size: "4188".to_string(),
         });
 
-        println!("config: {:#?}", &config);
+        // println!("config: {:#?}", &config);
 
         // Save the modified XML content back to the file
-        let encoded_xml_content = xml_to_string(&config)
-            .map_err(|e| format!("Error encoding SimBaseDocument to XML: {}", e))?;
+        // let encoded_xml_content = xml_to_string(&config)
+        //     .map_err(|e| format!("Error encoding SimBaseDocument to XML: {}", e))?;
 
-        let encoded_xml_content = encoded_xml_content.replace("UTF-8", "Windows-1252");
-        write_windows1252_file(&xml_file_path, &encoded_xml_content)?;
+        // let encoded_xml_content = encoded_xml_content.replace("UTF-8", "Windows-1252");
+
+        let mut buffer = String::new();
+        let mut ser = XmlSerializer::new(&mut buffer);
+        ser.indent(' ', 4);
+
+        config.serialize(ser).unwrap();
+
+        println!("Test {:?}", buffer);
+        write_windows1252_file(&xml_file_path, &buffer)?;
     }
 
     Ok((ipv4_address, ipv4_port))
