@@ -119,7 +119,6 @@ fn update_simconnect_config() -> Result<(String, String), String> {
 
     for comm_section in &mut config.simconnect_comm {
         if comm_section.protocol == "IPv4" && !comm_section.description.contains("Dynamic") {
-            println!("IPv4 section found");
             ipv4_address = match &comm_section.address {
                 Some(_) => Some(SERVER_ADDR.to_string()),
                 None => Some(SERVER_ADDR.to_string()),
@@ -128,6 +127,10 @@ fn update_simconnect_config() -> Result<(String, String), String> {
                 Some(port) => Some(port.clone()),
                 None => Some(SERVER_PORT.to_string()),
             };
+
+            comm_section.address = ipv4_address.clone();
+            comm_section.port = ipv4_port.clone();
+
             ipv4_found = true;
             break;
         }
@@ -145,13 +148,13 @@ fn update_simconnect_config() -> Result<(String, String), String> {
         });
     }
 
-    let mut buffer = String::new();
-    let mut ser = XmlSerializer::new(&mut buffer);
+    let mut output = String::new();
+    let mut ser = XmlSerializer::new(&mut output);
     ser.indent(' ', 4);
 
     config.serialize(ser).unwrap();
 
-    write_windows1252_file(&xml_file_path, &buffer)?;
+    write_windows1252_file(&xml_file_path, &output)?;
 
     Ok((ipv4_address.unwrap(), ipv4_port.unwrap()))
 }
