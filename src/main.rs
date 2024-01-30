@@ -3,6 +3,7 @@ use serde::Serialize;
 
 #[macro_use]
 extern crate serde_derive;
+
 extern crate encoding;
 extern crate quick_xml;
 
@@ -32,6 +33,7 @@ struct SimConnectComm {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename = "SimBase.Document")]
 struct SimBaseDocument {
     #[serde(rename = "@Type")]
     document_type: String,
@@ -149,6 +151,10 @@ fn update_simconnect_config() -> Result<(String, String), String> {
     }
 
     let mut output = String::new();
+
+    output.push_str(r#"<?xml version="1.0" encoding="Windows-1252"?>"#);
+    output.push_str("\n\n");
+
     let mut ser = XmlSerializer::new(&mut output);
     ser.indent(' ', 4);
 
