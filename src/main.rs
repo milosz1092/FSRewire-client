@@ -1,6 +1,5 @@
 use dirs;
 use serde::Serialize;
-use serde::Serializer;
 
 #[macro_use]
 extern crate serde_derive;
@@ -12,7 +11,6 @@ use std::fs;
 use encoding::{DecoderTrap, EncoderTrap};
 
 use quick_xml::de::from_str as xml_from_string;
-use quick_xml::se::to_string as xml_to_string;
 use quick_xml::se::Serializer as XmlSerializer;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,14 +21,14 @@ struct SimConnectComm {
     protocol: String,
     #[serde(rename = "Scope")]
     scope: String,
-    #[serde(rename = "Port")]
-    port: String,
     #[serde(rename = "MaxClients")]
     max_clients: String,
     #[serde(rename = "MaxRecvSize")]
     max_recv_size: String,
-    #[serde(default, rename = "Address")]
-    address: String,
+    #[serde(rename = "Address", skip_serializing_if = "Option::is_none")]
+    address: Option<String>,
+    #[serde(rename = "Port", skip_serializing_if = "Option::is_none")]
+    port: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -115,30 +113,27 @@ fn update_simconnect_config() -> Result<(String, String), String> {
     let mut config: SimBaseDocument = xml_from_string(&xml_content)
         .map_err(|e| format!("Error parsing SimConnect.xml: {}", e))?;
 
-    let mut ipv4_address = String::new();
-    let mut ipv4_port = String::new();
+    let mut ipv4_address = Some(SERVER_ADDR.to_string());
+    let mut ipv4_port = Some(SERVER_PORT.to_string());
     let mut ipv4_found = false;
 
     for comm_section in &mut config.simconnect_comm {
         if comm_section.protocol == "IPv4" && !comm_section.description.contains("Dynamic") {
             println!("IPv4 section found");
-            ipv4_address = comm_section.address.clone();
-            ipv4_port = comm_section.port.clone();
+            ipv4_address = match &comm_section.address {
+                Some(_) => Some(SERVER_ADDR.to_string()),
+                None => Some(SERVER_ADDR.to_string()),
+            };
+            ipv4_port = match &comm_section.port {
+                Some(port) => Some(port.clone()),
+                None => Some(SERVER_PORT.to_string()),
+            };
             ipv4_found = true;
             break;
         }
     }
 
-    if ipv4_address.ne(SERVER_ADDR) {
-        ipv4_address = SERVER_ADDR.to_string();
-    }
-
-    if ipv4_port.is_empty() {
-        ipv4_port = SERVER_PORT.to_string();
-    }
-
     if !ipv4_found {
-        // Add the IPv4 section with the default values if it doesn't exist
         config.simconnect_comm.push(SimConnectComm {
             protocol: "IPv4".to_string(),
             address: ipv4_address.clone(),
@@ -148,26 +143,17 @@ fn update_simconnect_config() -> Result<(String, String), String> {
             max_clients: "64".to_string(),
             max_recv_size: "4188".to_string(),
         });
-
-        // println!("config: {:#?}", &config);
-
-        // Save the modified XML content back to the file
-        // let encoded_xml_content = xml_to_string(&config)
-        //     .map_err(|e| format!("Error encoding SimBaseDocument to XML: {}", e))?;
-
-        // let encoded_xml_content = encoded_xml_content.replace("UTF-8", "Windows-1252");
-
-        let mut buffer = String::new();
-        let mut ser = XmlSerializer::new(&mut buffer);
-        ser.indent(' ', 4);
-
-        config.serialize(ser).unwrap();
-
-        println!("Test {:?}", buffer);
-        write_windows1252_file(&xml_file_path, &buffer)?;
     }
 
-    Ok((ipv4_address, ipv4_port))
+    let mut buffer = String::new();
+    let mut ser = XmlSerializer::new(&mut buffer);
+    ser.indent(' ', 4);
+
+    config.serialize(ser).unwrap();
+
+    write_windows1252_file(&xml_file_path, &buffer)?;
+
+    Ok((ipv4_address.unwrap(), ipv4_port.unwrap()))
 }
 
 fn main() {
