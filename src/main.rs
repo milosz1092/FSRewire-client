@@ -1,3 +1,4 @@
+mod schema;
 mod utils;
 use utils::msfs::check_if_msfs_running;
 use utils::simconnect::update_simconnect_config;

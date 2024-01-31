@@ -1,45 +1,13 @@
 extern crate quick_xml;
 use dirs;
 use serde::Serialize;
-use serde_derive::{Deserialize, Serialize};
 
 use quick_xml::de::from_str as xml_from_string;
 use quick_xml::se::Serializer as XmlSerializer;
 
 use super::file::{read_windows1252_file, write_windows1252_file};
 
-#[derive(Debug, Deserialize, Serialize)]
-struct SimConnectComm {
-    #[serde(rename = "Descr")]
-    description: String,
-    #[serde(rename = "Protocol")]
-    protocol: String,
-    #[serde(rename = "Scope")]
-    scope: String,
-    #[serde(rename = "MaxClients")]
-    max_clients: String,
-    #[serde(rename = "MaxRecvSize")]
-    max_recv_size: String,
-    #[serde(rename = "Address", skip_serializing_if = "Option::is_none")]
-    address: Option<String>,
-    #[serde(rename = "Port", skip_serializing_if = "Option::is_none")]
-    port: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename = "SimBase.Document")]
-struct SimBaseDocument {
-    #[serde(rename = "@Type")]
-    document_type: String,
-    #[serde(rename = "@version")]
-    version: String,
-    #[serde(rename = "Descr")]
-    description: String,
-    #[serde(rename = "Filename")]
-    filename: String,
-    #[serde(rename = "SimConnect.Comm", default)]
-    simconnect_comm: Vec<SimConnectComm>,
-}
+use crate::schema::simconnect::{SimBaseDocument, SimConnectComm};
 
 static SERVER_ADDR: &str = "0.0.0.0";
 static SERVER_PORT: &str = "500";
