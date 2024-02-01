@@ -9,7 +9,7 @@ use utils::msfs::check_if_msfs_running;
 use utils::simconnect::update_simconnect_config;
 
 use tray_icon::{
-    menu::{AboutMetadata, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    menu::{AboutMetadata, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem},
     TrayIconBuilder, TrayIconEvent,
 };
 use winit::event_loop::{ControlFlow, EventLoopBuilder};
@@ -21,9 +21,13 @@ fn main() {
 
     let try_icons = get_try_icons();
 
+    let menu = Box::new(Menu::new());
+    let exit_menu_item = MenuItem::new("Exit".to_string(), true, None);
+    menu.append(&exit_menu_item);
+
     let mut tray_icon = Some(
         TrayIconBuilder::new()
-            .with_menu(Box::new(Menu::new()))
+            .with_menu(menu)
             .with_tooltip("FSRewire-client")
             .with_icon(try_icons.neutral)
             .build()
@@ -53,7 +57,13 @@ fn main() {
         event_loop.set_control_flow(ControlFlow::Wait);
 
         if let Ok(event) = tray_channel.try_recv() {
-            println!("{event:?}");
+            // println!("{event:?}");
+        }
+
+        if let Ok(event) = menu_channel.try_recv() {
+            if event.id.0 == exit_menu_item.id().0 {
+                std::process::exit(0);
+            }
         }
     });
 }
