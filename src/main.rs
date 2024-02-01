@@ -36,10 +36,17 @@ fn main() {
 
     let update_config_result = update_simconnect_config();
 
-    if let Err(error) = update_config_result {
-        tray_icon.set_icon(Some(try_icons.error));
-    } else {
-        tray_icon.set_icon(Some(try_icons.running));
+    match update_config_result {
+        Ok(config) => {
+            if (config.is_changed && is_msfs_running) {
+                tray_icon.set_icon(Some(try_icons.warning));
+            } else {
+                tray_icon.set_icon(Some(try_icons.running));
+            }
+        }
+        Err(message) => {
+            tray_icon.set_icon(Some(try_icons.error));
+        }
     }
 
     event_loop.run(move |_event, event_loop| {

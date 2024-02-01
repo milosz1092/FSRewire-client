@@ -12,6 +12,12 @@ use crate::schema::simconnect::{SimBaseDocument, SimConnectComm};
 static SIMCONNECT_SERVER_ADDR: &str = "0.0.0.0";
 static SIMCONNECT_SERVER_PORT: &str = "500";
 
+pub struct SimConnectConfigResult {
+    pub address: String,
+    pub port: String,
+    pub is_changed: bool,
+}
+
 fn get_simconnect_xml_path() -> String {
     if let Some(user_home) = dirs::home_dir() {
         let sim_connect_file_name = "SimConnect.xml";
@@ -44,7 +50,7 @@ fn get_simconnect_xml_path() -> String {
     }
 }
 
-pub fn update_simconnect_config() -> Result<(String, String), String> {
+pub fn update_simconnect_config() -> Result<SimConnectConfigResult, String> {
     let xml_file_path = get_simconnect_xml_path();
 
     let xml_content = read_windows1252_file(&xml_file_path)?;
@@ -55,16 +61,30 @@ pub fn update_simconnect_config() -> Result<(String, String), String> {
     let mut ipv4_address = Some(SIMCONNECT_SERVER_ADDR.to_string());
     let mut ipv4_port = Some(SIMCONNECT_SERVER_PORT.to_string());
     let mut ipv4_found = false;
+    let mut is_config_changed = false;
 
     for comm_section in &mut config.simconnect_comm {
         if comm_section.protocol == "IPv4" && !comm_section.description.contains("Dynamic") {
             ipv4_address = match &comm_section.address {
-                Some(_) => Some(SIMCONNECT_SERVER_ADDR.to_string()),
-                None => Some(SIMCONNECT_SERVER_ADDR.to_string()),
+                Some(addr) => {
+                    if (addr != SIMCONNECT_SERVER_ADDR) {
+                        is_config_changed = true;
+                    }
+
+                    Some(SIMCONNECT_SERVER_ADDR.to_string())
+                }
+                None => {
+                    is_config_changed = true;
+                    Some(SIMCONNECT_SERVER_ADDR.to_string())
+                }
             };
+
             ipv4_port = match &comm_section.port {
                 Some(port) => Some(port.clone()),
-                None => Some(SIMCONNECT_SERVER_PORT.to_string()),
+                None => {
+                    is_config_changed = true;
+                    Some(SIMCONNECT_SERVER_PORT.to_string())
+                }
             };
 
             comm_section.address = ipv4_address.clone();
@@ -85,6 +105,8 @@ pub fn update_simconnect_config() -> Result<(String, String), String> {
             max_clients: "64".to_string(),
             max_recv_size: "4188".to_string(),
         });
+
+        is_config_changed = true;
     }
 
     let mut output = String::new();
@@ -99,5 +121,9 @@ pub fn update_simconnect_config() -> Result<(String, String), String> {
 
     write_windows1252_file(&xml_file_path, &output)?;
 
-    Ok((ipv4_address.unwrap(), ipv4_port.unwrap()))
+    Ok(SimConnectConfigResult {
+        address: ipv4_address.unwrap(),
+        port: ipv4_port.unwrap(),
+        is_changed: is_config_changed,
+    })
 }
