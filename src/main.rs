@@ -20,7 +20,7 @@ use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize, Position},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
-    window::{Fullscreen, Theme, Window, WindowAttributes, WindowBuilder, WindowButtons},
+    window::{Theme, Window, WindowAttributes, WindowBuilder, WindowButtons},
 };
 
 static APP_TITLE: &str = "FSRewire-client";
@@ -105,7 +105,14 @@ fn main() {
             if event.id.0 == exit_menu_item.id().0 {
                 std::process::exit(0);
             } else if event.id.0 == title_menu_item.id().0 {
-                window.set_visible(true);
+                if window.is_minimized().is_some() && window.is_minimized().unwrap() == true {
+                    window.set_visible(false);
+                }
+
+                if (window.is_visible().is_some() && window.is_visible().unwrap() == false) {
+                    window.set_visible(true);
+                }
+
                 window.focus_window();
             }
         }
