@@ -9,6 +9,8 @@ use ui::icons::get_try_icons;
 use utils::msfs::check_if_msfs_running;
 use utils::simconnect::update_simconnect_config;
 
+use std::sync::Arc;
+
 use tray_icon::{
     menu::{
         accelerator::Accelerator, AboutMetadata, IconMenuItem, Menu, MenuEvent, MenuId, MenuItem,
@@ -19,16 +21,19 @@ use tray_icon::{
 use winit::{
     dpi::{LogicalPosition, PhysicalPosition, PhysicalSize, Position},
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoopBuilder},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{Theme, Window, WindowAttributes, WindowBuilder, WindowButtons, WindowId},
 };
 
 static APP_TITLE: &str = "FSRewire-client";
 
-async fn render(window: &Window) {
-    let instance = wgpu::Instance::default();
-    let viewport = instance.create_surface(&window).unwrap();
-    let adapter = instance
+async fn run(window: &Arc<Window>, event_loop: EventLoop<()>) {
+    let is_msfs_running = check_if_msfs_running();
+    let try_icons = get_try_icons();
+
+    let wgpu_instance = wgpu::Instance::default();
+    let viewport = wgpu_instance.create_surface(&window).unwrap();
+    let adapter = wgpu_instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             // Request an adapter which can render to our surface
             compatible_surface: Some(&viewport),
@@ -56,64 +61,48 @@ async fn render(window: &Window) {
 
     viewport.configure(&device, &config);
 
-    let frame = viewport.get_current_texture().unwrap();
+    let redraw = || {
+        let frame = viewport.get_current_texture().unwrap();
 
-    let view = frame
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-    {
-        let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-    }
+        {
+            let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.02,
+                            g: 0.02,
+                            b: 0.02,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
 
-    queue.submit(Some(encoder.finish()));
-    frame.present();
-}
+        queue.submit(Some(encoder.finish()));
+        frame.present();
+    };
 
-fn main() {
-    env_logger::init();
-
-    let is_msfs_running = check_if_msfs_running();
-
-    let event_loop = EventLoopBuilder::new().build().unwrap();
-
-    let try_icons = get_try_icons();
-
-    let mut window = WindowBuilder::new()
-        .with_title("FSRewire-client")
-        .with_theme(Some(Theme::Dark))
-        .with_active(false)
-        .with_resizable(false)
-        .with_visible(false)
-        .with_inner_size(PhysicalSize {
-            width: 600,
-            height: 300,
-        })
-        .with_position(PhysicalPosition { x: 200, y: 200 })
-        .with_enabled_buttons(WindowButtons::MINIMIZE.union(WindowButtons::CLOSE))
-        .build(&event_loop)
-        .unwrap();
-
-    pollster::block_on(render(&window));
-
+    redraw();
     window.set_visible(true);
     window.focus_window();
+
+    let menu_channel = MenuEvent::receiver();
+    let tray_channel = TrayIconEvent::receiver();
 
     let menu = Box::new(Menu::new());
     let title_menu_item = MenuItem::new(APP_TITLE, true, None);
@@ -134,9 +123,6 @@ fn main() {
     .unwrap();
 
     tray_icon.set_visible(true);
-
-    let menu_channel = MenuEvent::receiver();
-    let tray_channel = TrayIconEvent::receiver();
 
     let update_config_result = update_simconnect_config();
 
@@ -161,7 +147,9 @@ fn main() {
                 WindowEvent::CloseRequested => {
                     window.set_visible(false);
                 }
-                WindowEvent::RedrawRequested => {}
+                WindowEvent::RedrawRequested => {
+                    redraw();
+                }
                 _ => {}
             }
         }
@@ -182,6 +170,28 @@ fn main() {
             }
         }
     });
+}
 
-    println!("Test");
+fn main() {
+    env_logger::init();
+
+    let event_loop = EventLoopBuilder::new().build().unwrap();
+
+    let window = WindowBuilder::new()
+        .with_title(APP_TITLE)
+        .with_theme(Some(Theme::Dark))
+        .with_active(false)
+        .with_resizable(false)
+        .with_visible(false)
+        .with_inner_size(PhysicalSize {
+            width: 600,
+            height: 300,
+        })
+        .with_position(PhysicalPosition { x: 200, y: 200 })
+        .with_enabled_buttons(WindowButtons::MINIMIZE.union(WindowButtons::CLOSE))
+        .build(&event_loop)
+        .unwrap();
+    let window = Arc::new(window);
+
+    pollster::block_on(run(&window, event_loop));
 }
