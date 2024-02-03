@@ -1,5 +1,5 @@
-#![allow(unused)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(unused)]
 
 mod schema;
 mod ui;
@@ -12,17 +12,14 @@ use utils::simconnect::update_simconnect_config;
 use std::sync::Arc;
 
 use tray_icon::{
-    menu::{
-        accelerator::Accelerator, AboutMetadata, IconMenuItem, Menu, MenuEvent, MenuId, MenuItem,
-        PredefinedMenuItem,
-    },
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     TrayIconBuilder, TrayIconEvent,
 };
 use winit::{
-    dpi::{LogicalPosition, PhysicalPosition, PhysicalSize, Position},
+    dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
-    window::{Theme, Window, WindowAttributes, WindowBuilder, WindowButtons, WindowId},
+    window::{Theme, Window, WindowBuilder, WindowButtons},
 };
 
 static APP_TITLE: &str = "FSRewire-client";
@@ -102,7 +99,6 @@ async fn run(window: &Arc<Window>, event_loop: EventLoop<()>) {
     window.focus_window();
 
     let menu_channel = MenuEvent::receiver();
-    let tray_channel = TrayIconEvent::receiver();
 
     let menu = Box::new(Menu::new());
     let title_menu_item = MenuItem::new(APP_TITLE, true, None);
