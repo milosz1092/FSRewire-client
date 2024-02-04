@@ -1,10 +1,22 @@
+use glyphon::{FontSystem, SwashCache, TextAtlas, TextRenderer};
 use wgpu::{
-    CompositeAlphaMode, Device, PresentMode, Queue, Surface, SurfaceConfiguration, TextureFormat,
-    TextureUsages,
+    CompositeAlphaMode, Device, MultisampleState, PresentMode, Queue, Surface,
+    SurfaceConfiguration, TextureFormat, TextureUsages,
 };
 use winit::window::Window;
 
-pub async fn configure_wgpu(window: &Window) -> (Device, Queue, Surface<'_>, TextureFormat) {
+pub async fn configure_wgpu(
+    window: &Window,
+) -> (
+    Device,
+    Queue,
+    Surface<'_>,
+    TextureFormat,
+    FontSystem,
+    SwashCache,
+    TextAtlas,
+    TextRenderer,
+) {
     let wgpu_instance = wgpu::Instance::default();
     let viewport = wgpu_instance.create_surface(window).unwrap();
     let adapter = wgpu_instance
@@ -45,5 +57,20 @@ pub async fn configure_wgpu(window: &Window) -> (Device, Queue, Surface<'_>, Tex
 
     viewport.configure(&device, &config);
 
-    (device, queue, viewport, swapchain_format)
+    let mut font_system = FontSystem::new();
+    let mut swash_cache: SwashCache = SwashCache::new();
+    let mut text_atlas: TextAtlas = TextAtlas::new(&device, &queue, swapchain_format);
+    let mut text_renderer =
+        TextRenderer::new(&mut text_atlas, &device, MultisampleState::default(), None);
+
+    (
+        device,
+        queue,
+        viewport,
+        swapchain_format,
+        font_system,
+        swash_cache,
+        text_atlas,
+        text_renderer,
+    )
 }

@@ -11,7 +11,7 @@ use utils::simconnect::update_simconnect_config;
 use utils::{msfs::check_if_msfs_running, wgpu::configure_wgpu};
 
 use tray_icon::menu::MenuEvent;
-use wgpu::MultisampleState;
+use wgpu::{Device, MultisampleState, Queue, TextureFormat};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
@@ -26,18 +26,22 @@ use glyphon::{
 
 pub static APP_TITLE: &str = "FSRewire-client";
 
+fn get_text_renderer(device: &Device, queue: &Queue, swapchain_format: TextureFormat) {}
+
 async fn run(window: &Window, event_loop: EventLoop<()>) {
     let mut system_try = SystemTry::new();
-    let scale_factor = window.scale_factor();
 
-    let (device, queue, viewport, swapchain_format) = configure_wgpu(window).await;
+    let (
+        device,
+        queue,
+        viewport,
+        swapchain_format,
+        mut font_system,
+        mut swash_cache,
+        mut text_atlas,
+        mut text_renderer,
+    ) = configure_wgpu(window).await;
 
-    // Set up text renderer
-    let mut font_system = FontSystem::new();
-    let mut cache = SwashCache::new();
-    let mut atlas = TextAtlas::new(&device, &queue, swapchain_format);
-    let mut text_renderer =
-        TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
     let mut text_first = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
     let mut text_second = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
 
@@ -51,7 +55,7 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
     );
     text_first.set_text(
         &mut font_system,
-        "Hello world! 👋\n",
+        "Hello world! 👋",
         Attrs::new().family(Family::SansSerif),
         Shaping::Advanced,
     );
@@ -76,7 +80,7 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
                 &device,
                 &queue,
                 &mut font_system,
-                &mut atlas,
+                &mut text_atlas,
                 Resolution {
                     width: physical_width,
                     height: physical_height,
@@ -109,7 +113,7 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
                         default_color: Color::rgb(100, 100, 100),
                     },
                 ],
-                &mut cache,
+                &mut swash_cache,
             )
             .unwrap();
 
@@ -143,13 +147,13 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
                 occlusion_query_set: None,
             });
 
-            text_renderer.render(&atlas, &mut rpass).unwrap();
+            text_renderer.render(&text_atlas, &mut rpass).unwrap();
         }
 
         queue.submit(Some(encoder.finish()));
         frame.present();
 
-        atlas.trim();
+        text_atlas.trim();
     };
 
     redraw();
