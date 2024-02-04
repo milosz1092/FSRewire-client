@@ -9,8 +9,6 @@ use ui::icons::get_try_icons;
 use utils::msfs::check_if_msfs_running;
 use utils::simconnect::update_simconnect_config;
 
-use std::sync::Arc;
-
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     TrayIconBuilder, TrayIconEvent,
@@ -24,7 +22,7 @@ use winit::{
 
 static APP_TITLE: &str = "FSRewire-client";
 
-async fn run(window: &Arc<Window>, event_loop: EventLoop<()>) {
+async fn run(window: &Window, event_loop: EventLoop<()>) {
     let is_msfs_running = check_if_msfs_running();
     let try_icons = get_try_icons();
 
@@ -144,7 +142,7 @@ async fn run(window: &Arc<Window>, event_loop: EventLoop<()>) {
                     window.set_visible(false);
                 }
                 WindowEvent::RedrawRequested => {
-                    redraw();
+                    // redraw();
                 }
                 _ => {}
             }
@@ -187,7 +185,6 @@ fn main() {
         .with_enabled_buttons(WindowButtons::MINIMIZE.union(WindowButtons::CLOSE))
         .build(&event_loop)
         .unwrap();
-    let window = Arc::new(window);
 
     pollster::block_on(run(&window, event_loop));
 }
