@@ -10,6 +10,7 @@ use utils::simconnect::update_simconnect_config;
 use utils::{msfs::check_if_msfs_running, wgpu::configure_wgpu};
 
 use tray_icon::menu::MenuEvent;
+use wgpu::MultisampleState;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
@@ -17,14 +18,67 @@ use winit::{
     window::{Theme, Window, WindowBuilder, WindowButtons},
 };
 
+use glyphon::{
+    Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea,
+    TextAtlas, TextBounds, TextRenderer,
+};
+
 pub static APP_TITLE: &str = "FSRewire-client";
 
 async fn run(window: &Window, event_loop: EventLoop<()>) {
     let mut system_try = SystemTry::new();
+    let scale_factor = window.scale_factor();
 
-    let (device, queue, viewport) = configure_wgpu(window).await;
+    let (device, queue, viewport, swapchain_format) = configure_wgpu(window).await;
 
-    let redraw = || {
+    // Set up text renderer
+    let mut font_system = FontSystem::new();
+    let mut cache = SwashCache::new();
+    let mut atlas = TextAtlas::new(&device, &queue, swapchain_format);
+    let mut text_renderer =
+        TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
+    let mut buffer = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
+
+    let physical_width = (window.inner_size().width) as f32;
+    let physical_height = (window.inner_size().height) as f32;
+
+    buffer.set_size(&mut font_system, physical_width, physical_height);
+    buffer.set_text(
+        &mut font_system,
+        "Hello world! 👋\n",
+        Attrs::new().family(Family::SansSerif),
+        Shaping::Advanced,
+    );
+    buffer.shape_until_scroll(&mut font_system);
+
+    let mut redraw = || {
+        text_renderer
+            .prepare(
+                &device,
+                &queue,
+                &mut font_system,
+                &mut atlas,
+                Resolution {
+                    width: physical_width as u32,
+                    height: physical_height as u32,
+                },
+                [TextArea {
+                    buffer: &buffer,
+                    left: 0.0,
+                    top: 0.0,
+                    scale: 1.0,
+                    bounds: TextBounds {
+                        left: 0,
+                        top: 0,
+                        right: physical_width as i32,
+                        bottom: physical_height as i32,
+                    },
+                    default_color: Color::rgb(255, 255, 255),
+                }],
+                &mut cache,
+            )
+            .unwrap();
+
         let frame = viewport.get_current_texture().unwrap();
 
         let view = frame
@@ -35,7 +89,7 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
-            let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -54,10 +108,14 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+
+            text_renderer.render(&atlas, &mut rpass).unwrap();
         }
 
         queue.submit(Some(encoder.finish()));
         frame.present();
+
+        atlas.trim();
     };
 
     redraw();
@@ -65,8 +123,6 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
     window.focus_window();
 
     let is_msfs_running = check_if_msfs_running();
-
-    let menu_channel = MenuEvent::receiver();
 
     let update_config_result = update_simconnect_config();
 
@@ -80,6 +136,8 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
         }
         Err(message) => system_try.set_status(TryStatus::Error),
     }
+
+    let menu_channel = MenuEvent::receiver();
 
     event_loop.run(move |event: Event<()>, event_loop| {
         event_loop.set_control_flow(ControlFlow::Wait);

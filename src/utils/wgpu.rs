@@ -1,7 +1,10 @@
-use wgpu::{Device, Queue, Surface};
+use wgpu::{
+    CompositeAlphaMode, Device, PresentMode, Queue, Surface, SurfaceConfiguration, TextureFormat,
+    TextureUsages,
+};
 use winit::window::Window;
 
-pub async fn configure_wgpu(window: &Window) -> (Device, Queue, Surface<'_>) {
+pub async fn configure_wgpu(window: &Window) -> (Device, Queue, Surface<'_>, TextureFormat) {
     let wgpu_instance = wgpu::Instance::default();
     let viewport = wgpu_instance.create_surface(window).unwrap();
     let adapter = wgpu_instance
@@ -26,11 +29,21 @@ pub async fn configure_wgpu(window: &Window) -> (Device, Queue, Surface<'_>) {
         .expect("Failed to create device");
 
     let size = window.inner_size();
-    let config = viewport
-        .get_default_config(&adapter, size.width, size.height)
-        .unwrap();
+
+    let swapchain_format = TextureFormat::Bgra8UnormSrgb;
+
+    let mut config = SurfaceConfiguration {
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        format: swapchain_format,
+        width: size.width,
+        height: size.height,
+        present_mode: PresentMode::Fifo,
+        alpha_mode: CompositeAlphaMode::Opaque,
+        view_formats: vec![],
+        desired_maximum_frame_latency: 2,
+    };
 
     viewport.configure(&device, &config);
 
-    (device, queue, viewport)
+    (device, queue, viewport, swapchain_format)
 }
