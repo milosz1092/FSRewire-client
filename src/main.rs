@@ -5,17 +5,11 @@ mod schema;
 mod ui;
 mod utils;
 
-use ui::{
-    icons::get_try_icons,
-    system_try::{SystemTry, TryStatus, MENU_ITEM_EXIT_ID, MENU_ITEM_STATUS_ID},
-};
-use utils::msfs::check_if_msfs_running;
+use ui::system_try::{SystemTry, TryStatus, MENU_ITEM_EXIT_ID, MENU_ITEM_STATUS_ID};
 use utils::simconnect::update_simconnect_config;
+use utils::{msfs::check_if_msfs_running, wgpu::configure_wgpu};
 
-use tray_icon::{
-    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
-    TrayIconBuilder, TrayIconEvent,
-};
+use tray_icon::menu::MenuEvent;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
@@ -28,35 +22,7 @@ pub static APP_TITLE: &str = "FSRewire-client";
 async fn run(window: &Window, event_loop: EventLoop<()>) {
     let mut system_try = SystemTry::new();
 
-    let wgpu_instance = wgpu::Instance::default();
-    let viewport = wgpu_instance.create_surface(&window).unwrap();
-    let adapter = wgpu_instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            // Request an adapter which can render to our surface
-            compatible_surface: Some(&viewport),
-            ..Default::default()
-        })
-        .await
-        .expect("Failed to find an appropriate adapter");
-
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-            },
-            None,
-        )
-        .await
-        .expect("Failed to create device");
-
-    let size = window.inner_size();
-    let config = viewport
-        .get_default_config(&adapter, size.width, size.height)
-        .unwrap();
-
-    viewport.configure(&device, &config);
+    let (device, queue, viewport) = configure_wgpu(window).await;
 
     let redraw = || {
         let frame = viewport.get_current_texture().unwrap();
