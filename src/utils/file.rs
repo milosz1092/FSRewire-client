@@ -1,5 +1,8 @@
 use encoding::{DecoderTrap, EncoderTrap};
 use std::fs;
+use std::path::Path;
+use tray_icon::Icon as TryIcon;
+use winit::window::Icon as WindowIcon;
 
 pub fn read_windows1252_file(file_path: &str) -> Result<String, String> {
     let content =
@@ -20,14 +23,21 @@ pub fn write_windows1252_file(file_path: &str, content: &str) -> Result<(), Stri
     }
 }
 
-pub fn load_icon(path: &std::path::Path) -> tray_icon::Icon {
-    let (icon_rgba, icon_width, icon_height) = {
-        let image = image::open(path)
-            .expect("Failed to open icon path")
-            .into_rgba8();
-        let (width, height) = image.dimensions();
-        let rgba = image.into_raw();
-        (rgba, width, height)
-    };
-    tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon")
+fn load_icon_file(path: &std::path::Path) -> (Vec<u8>, u32, u32) {
+    let image = image::open(path)
+        .expect("Failed to open icon path")
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    let rgba = image.into_raw();
+    (rgba, width, height)
+}
+
+pub fn load_try_icon(path: &std::path::Path) -> TryIcon {
+    let (icon_rgba, icon_width, icon_height) = load_icon_file(path);
+    TryIcon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open try icon")
+}
+
+pub fn load_window_icon(path: &Path) -> WindowIcon {
+    let (icon_rgba, icon_width, icon_height) = load_icon_file(path);
+    WindowIcon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open window icon")
 }

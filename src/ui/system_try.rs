@@ -5,7 +5,7 @@ use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder,
 };
 
-use crate::{utils::file::load_icon, APP_TITLE};
+use crate::APP_TITLE;
 
 use super::icons::{get_try_icons, TryIcons};
 

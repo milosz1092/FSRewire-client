@@ -5,6 +5,7 @@ mod schema;
 mod ui;
 mod utils;
 
+use ui::icons::get_window_icon;
 use ui::system_try::{SystemTry, TryStatus, MENU_ITEM_EXIT_ID, MENU_ITEM_STATUS_ID};
 use utils::simconnect::update_simconnect_config;
 use utils::{msfs::check_if_msfs_running, wgpu::configure_wgpu};
@@ -15,12 +16,12 @@ use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
-    window::{Theme, Window, WindowBuilder, WindowButtons},
+    window::{Icon, Theme, Window, WindowBuilder, WindowButtons},
 };
 
 use glyphon::{
     Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea,
-    TextAtlas, TextBounds, TextRenderer,
+    TextAtlas, TextBounds, TextRenderer, Weight,
 };
 
 pub static APP_TITLE: &str = "FSRewire-client";
@@ -37,19 +38,37 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
     let mut atlas = TextAtlas::new(&device, &queue, swapchain_format);
     let mut text_renderer =
         TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
-    let mut buffer = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
+    let mut text_first = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
+    let mut text_second = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
 
-    let physical_width = (window.inner_size().width) as f32;
-    let physical_height = (window.inner_size().height) as f32;
+    let physical_width = window.inner_size().width;
+    let physical_height = window.inner_size().height;
 
-    buffer.set_size(&mut font_system, physical_width, physical_height);
-    buffer.set_text(
+    text_first.set_size(
+        &mut font_system,
+        physical_width as f32,
+        physical_height as f32,
+    );
+    text_first.set_text(
         &mut font_system,
         "Hello world! 👋\n",
         Attrs::new().family(Family::SansSerif),
         Shaping::Advanced,
     );
-    buffer.shape_until_scroll(&mut font_system);
+    text_first.shape_until_scroll(&mut font_system);
+
+    text_second.set_size(
+        &mut font_system,
+        physical_width as f32,
+        physical_height as f32,
+    );
+    text_second.set_text(
+        &mut font_system,
+        "ver 1.0.3",
+        Attrs::new().family(Family::Monospace),
+        Shaping::Advanced,
+    );
+    text_second.shape_until_scroll(&mut font_system);
 
     let mut redraw = || {
         text_renderer
@@ -59,22 +78,37 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
                 &mut font_system,
                 &mut atlas,
                 Resolution {
-                    width: physical_width as u32,
-                    height: physical_height as u32,
+                    width: physical_width,
+                    height: physical_height,
                 },
-                [TextArea {
-                    buffer: &buffer,
-                    left: 0.0,
-                    top: 0.0,
-                    scale: 1.0,
-                    bounds: TextBounds {
-                        left: 0,
-                        top: 0,
-                        right: physical_width as i32,
-                        bottom: physical_height as i32,
+                [
+                    TextArea {
+                        buffer: &text_first,
+                        left: 0.0,
+                        top: 0.0,
+                        scale: 1.0,
+                        bounds: TextBounds {
+                            left: 0,
+                            top: 0,
+                            right: physical_width as i32,
+                            bottom: physical_height as i32,
+                        },
+                        default_color: Color::rgb(220, 220, 220),
                     },
-                    default_color: Color::rgb(255, 255, 255),
-                }],
+                    TextArea {
+                        buffer: &text_second,
+                        left: 520.0,
+                        top: 270.0,
+                        scale: 1.0,
+                        bounds: TextBounds {
+                            left: 0,
+                            top: 0,
+                            right: physical_width as i32,
+                            bottom: physical_height as i32,
+                        },
+                        default_color: Color::rgb(100, 100, 100),
+                    },
+                ],
                 &mut cache,
             )
             .unwrap();
@@ -189,6 +223,7 @@ fn main() {
         })
         .with_position(PhysicalPosition { x: 200, y: 200 })
         .with_enabled_buttons(WindowButtons::MINIMIZE.union(WindowButtons::CLOSE))
+        .with_window_icon(Some(get_window_icon()))
         .build(&event_loop)
         .unwrap();
 
