@@ -5,7 +5,10 @@ mod schema;
 mod ui;
 mod utils;
 
-use ui::icons::get_try_icons;
+use ui::{
+    icons::get_try_icons,
+    system_try::{SystemTry, TryStatus, MENU_ITEM_EXIT_ID, MENU_ITEM_STATUS_ID},
+};
 use utils::msfs::check_if_msfs_running;
 use utils::simconnect::update_simconnect_config;
 
@@ -20,11 +23,10 @@ use winit::{
     window::{Theme, Window, WindowBuilder, WindowButtons},
 };
 
-static APP_TITLE: &str = "FSRewire-client";
+pub static APP_TITLE: &str = "FSRewire-client";
 
 async fn run(window: &Window, event_loop: EventLoop<()>) {
-    let is_msfs_running = check_if_msfs_running();
-    let try_icons = get_try_icons();
+    let mut system_try = SystemTry::new();
 
     let wgpu_instance = wgpu::Instance::default();
     let viewport = wgpu_instance.create_surface(&window).unwrap();
@@ -96,41 +98,21 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
     window.set_visible(true);
     window.focus_window();
 
+    let is_msfs_running = check_if_msfs_running();
+
     let menu_channel = MenuEvent::receiver();
-
-    let menu = Box::new(Menu::new());
-    let title_menu_item = MenuItem::new(APP_TITLE, true, None);
-    let separator_menu_item = PredefinedMenuItem::separator();
-    let exit_menu_item = MenuItem::new("Exit".to_string(), true, None);
-    menu.append(&title_menu_item);
-    menu.append(&separator_menu_item);
-    menu.append(&exit_menu_item);
-
-    let mut tray_icon = Some(
-        TrayIconBuilder::new()
-            .with_menu(menu)
-            .with_tooltip(APP_TITLE)
-            .with_icon(try_icons.neutral)
-            .build()
-            .unwrap(),
-    )
-    .unwrap();
-
-    tray_icon.set_visible(true);
 
     let update_config_result = update_simconnect_config();
 
     match update_config_result {
         Ok(config) => {
             if (config.is_changed && is_msfs_running) {
-                tray_icon.set_icon(Some(try_icons.warning));
+                system_try.set_status(TryStatus::Warning)
             } else {
-                tray_icon.set_icon(Some(try_icons.running));
+                system_try.set_status(TryStatus::Running)
             }
         }
-        Err(message) => {
-            tray_icon.set_icon(Some(try_icons.error));
-        }
+        Err(message) => system_try.set_status(TryStatus::Error),
     }
 
     event_loop.run(move |event: Event<()>, event_loop| {
@@ -149,9 +131,9 @@ async fn run(window: &Window, event_loop: EventLoop<()>) {
         }
 
         if let Ok(event) = menu_channel.try_recv() {
-            if event.id.0 == exit_menu_item.id().0 {
+            if event.id.0 == MENU_ITEM_EXIT_ID {
                 std::process::exit(0);
-            } else if event.id.0 == title_menu_item.id().0 {
+            } else if event.id.0 == MENU_ITEM_STATUS_ID {
                 if window.is_minimized().is_some() && window.is_minimized().unwrap() == true {
                     window.set_visible(false);
                 }
