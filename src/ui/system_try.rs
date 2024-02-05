@@ -5,7 +5,7 @@ use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder,
 };
 
-use crate::APP_TITLE;
+use crate::{AppStatus, APP_TITLE};
 
 use super::icons::{get_try_icons, TryIcons};
 
@@ -20,13 +20,6 @@ enum MenuItemId {
 pub struct SystemTry {
     instance: TrayIcon,
     icons: TryIcons,
-}
-
-pub enum TryStatus {
-    Neutral,
-    Running,
-    Warning,
-    Error,
 }
 
 impl SystemTry {
@@ -64,12 +57,12 @@ impl SystemTry {
         SystemTry { icons, instance }
     }
 
-    pub fn set_status(&mut self, status: TryStatus) {
+    pub fn set_status(&mut self, status: AppStatus) {
         let new_icon = match status {
-            TryStatus::Neutral => self.icons.neutral.clone(),
-            TryStatus::Running => self.icons.running.clone(),
-            TryStatus::Warning => self.icons.warning.clone(),
-            TryStatus::Error => self.icons.error.clone(),
+            AppStatus::Neutral => self.icons.neutral.clone(),
+            AppStatus::Running => self.icons.running.clone(),
+            AppStatus::Warning => self.icons.warning.clone(),
+            AppStatus::Error => self.icons.error.clone(),
         };
 
         // Update the instance's icon
