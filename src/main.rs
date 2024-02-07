@@ -26,6 +26,7 @@ use glyphon::{
 
 pub static APP_TITLE: &str = "FSRewire-client";
 
+#[derive(Debug)]
 pub enum AppStatus {
     Neutral,
     Running,
@@ -33,9 +34,10 @@ pub enum AppStatus {
     Error,
 }
 
+#[derive(Debug)]
 struct AppState {
-    status: AppStatus,
-    error_msg: Option<String>,
+    pub status: AppStatus,
+    pub error_msg: Option<String>,
 }
 
 impl AppState {
@@ -49,8 +51,34 @@ impl AppState {
 
 fn get_text_renderer(device: &Device, queue: &Queue, swapchain_format: TextureFormat) {}
 
-async fn run(window: &Window, app_state: &AppState, event_loop: EventLoop<()>) {
+async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()>) {
     let mut system_try = SystemTry::new();
+
+    let is_msfs_running = check_if_msfs_running();
+
+    let update_config_result = update_simconnect_config();
+
+    match update_config_result {
+        Ok(config) => {
+            if (config.is_changed && is_msfs_running) {
+                system_try.set_status(AppStatus::Warning);
+                app_state.status = AppStatus::Warning;
+                app_state.error_msg = Some(
+                    "Configuration has been changed during MSFS2020 runtime.\n
+                    Let's restart Microsoft Flight Simulator 2020."
+                        .to_string(),
+                );
+            } else {
+                system_try.set_status(AppStatus::Running);
+                app_state.status = AppStatus::Running;
+            }
+        }
+        Err(message) => {
+            system_try.set_status(AppStatus::Error);
+            app_state.status = AppStatus::Error;
+            app_state.error_msg = Some(message.clone());
+        }
+    }
 
     let (
         device,
@@ -63,38 +91,69 @@ async fn run(window: &Window, app_state: &AppState, event_loop: EventLoop<()>) {
         mut text_renderer,
     ) = configure_wgpu(window).await;
 
-    let mut redraw = || {
-        let physical_width = window.inner_size().width;
-        let physical_height = window.inner_size().height;
+    let mut text_app_header = Buffer::new(&mut font_system, Metrics::new(22.0, 42.0));
+    let mut text_app_version = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
+    let mut text_app_status = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
 
-        let mut text_first = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
-        let mut text_second = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
+    let physical_width = window.inner_size().width;
+    let physical_height = window.inner_size().height;
 
-        text_first.set_size(
-            &mut font_system,
-            physical_width as f32,
-            physical_height as f32,
-        );
-        text_first.set_text(
-            &mut font_system,
-            "Hello world! 👋",
-            Attrs::new().family(Family::SansSerif),
-            Shaping::Advanced,
-        );
-        text_first.shape_until_scroll(&mut font_system);
+    text_app_header.set_size(
+        &mut font_system,
+        physical_width as f32,
+        physical_height as f32,
+    );
+    text_app_header.set_text(
+        &mut font_system,
+        "Discovery Service", //👋
+        Attrs::new().family(Family::SansSerif).weight(Weight::BOLD),
+        Shaping::Advanced,
+    );
 
-        text_second.set_size(
-            &mut font_system,
-            physical_width as f32,
-            physical_height as f32,
-        );
-        text_second.set_text(
-            &mut font_system,
-            "ver 1.0.3",
-            Attrs::new().family(Family::Monospace),
-            Shaping::Advanced,
-        );
-        text_second.shape_until_scroll(&mut font_system);
+    text_app_version.set_size(
+        &mut font_system,
+        physical_width as f32,
+        physical_height as f32,
+    );
+    text_app_version.set_text(
+        &mut font_system,
+        "ver 1.0.3",
+        Attrs::new().family(Family::Monospace),
+        Shaping::Advanced,
+    );
+
+    let mut redraw = |app_state: &AppState| {
+        println!("redraw...{:#?}", app_state);
+
+        let mut text_areas: Vec<TextArea> = Vec::new();
+
+        text_areas.push(TextArea {
+            buffer: &text_app_header,
+            left: 205.0,
+            top: 0.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: 0,
+                top: 0,
+                right: physical_width as i32,
+                bottom: physical_height as i32,
+            },
+            default_color: Color::rgb(220, 220, 220),
+        });
+
+        text_areas.push(TextArea {
+            buffer: &text_app_version,
+            left: 520.0,
+            top: 270.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: 0,
+                top: 0,
+                right: physical_width as i32,
+                bottom: physical_height as i32,
+            },
+            default_color: Color::rgb(100, 100, 100),
+        });
 
         text_renderer
             .prepare(
@@ -106,34 +165,7 @@ async fn run(window: &Window, app_state: &AppState, event_loop: EventLoop<()>) {
                     width: physical_width,
                     height: physical_height,
                 },
-                [
-                    TextArea {
-                        buffer: &text_first,
-                        left: 0.0,
-                        top: 0.0,
-                        scale: 1.0,
-                        bounds: TextBounds {
-                            left: 0,
-                            top: 0,
-                            right: physical_width as i32,
-                            bottom: physical_height as i32,
-                        },
-                        default_color: Color::rgb(220, 220, 220),
-                    },
-                    TextArea {
-                        buffer: &text_second,
-                        left: 520.0,
-                        top: 270.0,
-                        scale: 1.0,
-                        bounds: TextBounds {
-                            left: 0,
-                            top: 0,
-                            right: physical_width as i32,
-                            bottom: physical_height as i32,
-                        },
-                        default_color: Color::rgb(100, 100, 100),
-                    },
-                ],
+                text_areas,
                 &mut swash_cache,
             )
             .unwrap();
@@ -177,25 +209,10 @@ async fn run(window: &Window, app_state: &AppState, event_loop: EventLoop<()>) {
         text_atlas.trim();
     };
 
-    redraw();
+    redraw(&app_state);
 
     window.set_visible(true);
     window.focus_window();
-
-    let is_msfs_running = check_if_msfs_running();
-
-    let update_config_result = update_simconnect_config();
-
-    match update_config_result {
-        Ok(config) => {
-            if (config.is_changed && is_msfs_running) {
-                system_try.set_status(AppStatus::Warning)
-            } else {
-                system_try.set_status(AppStatus::Running)
-            }
-        }
-        Err(message) => system_try.set_status(AppStatus::Error),
-    }
 
     let menu_channel = MenuEvent::receiver();
 
@@ -208,7 +225,7 @@ async fn run(window: &Window, app_state: &AppState, event_loop: EventLoop<()>) {
                     window.set_visible(false);
                 }
                 WindowEvent::RedrawRequested => {
-                    // redraw();
+                    redraw(&app_state);
                 }
                 _ => {}
             }
@@ -255,5 +272,5 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    pollster::block_on(run(&window, &app_state, event_loop));
+    pollster::block_on(run(&window, &mut app_state, event_loop));
 }
