@@ -20,8 +20,8 @@ use winit::{
 };
 
 use glyphon::{
-    Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea,
-    TextAtlas, TextBounds, TextRenderer, Weight,
+    Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, Style, SwashCache,
+    TextArea, TextAtlas, TextBounds, TextRenderer, Weight,
 };
 
 pub static APP_TITLE: &str = "FSRewire-client";
@@ -68,6 +68,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     let mut text_app_header = Buffer::new(&mut font_system, Metrics::new(22.0, 42.0));
     let mut text_app_version = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
     let mut text_app_status = Buffer::new(&mut font_system, Metrics::new(22.0, 42.0));
+    let mut text_app_message = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
 
     let physical_width = window.inner_size().width;
     let physical_height = window.inner_size().height;
@@ -89,6 +90,11 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         physical_width as f32,
         physical_height as f32,
     );
+    text_app_message.set_size(
+        &mut font_system,
+        physical_width as f32,
+        physical_height as f32,
+    );
 
     text_app_version.set_size(
         &mut font_system,
@@ -105,6 +111,8 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     let mut redraw = |app_state: &AppState| {
         println!("redraw...{:#?}", app_state);
 
+        let mut text_areas: Vec<TextArea> = Vec::new();
+
         let status_text = match (&app_state.status) {
             &AppStatus::Neutral => "Status: PENDING",
             &AppStatus::Error => "Status: ERROR",
@@ -119,7 +127,28 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
             Shaping::Advanced,
         );
 
-        let mut text_areas: Vec<TextArea> = Vec::new();
+        if Option::is_some(&app_state.msg_text) {
+            text_app_message.set_text(
+                &mut font_system,
+                &app_state.msg_text.as_ref().unwrap(),
+                Attrs::new().family(Family::SansSerif).style(Style::Italic),
+                Shaping::Advanced,
+            );
+
+            text_areas.push(TextArea {
+                buffer: &text_app_message,
+                left: 100.0,
+                top: 130.0,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: 0,
+                    top: 0,
+                    right: physical_width as i32,
+                    bottom: physical_height as i32,
+                },
+                default_color: Color::rgb(220, 220, 220),
+            });
+        }
 
         text_areas.push(TextArea {
             buffer: &text_app_header,
@@ -137,8 +166,8 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
 
         text_areas.push(TextArea {
             buffer: &text_app_status,
-            left: 200.0,
-            top: 115.0,
+            left: 100.0,
+            top: 100.0,
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -239,6 +268,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
             } else {
                 system_try.set_status(AppStatus::Running);
                 app_state.status = AppStatus::Running;
+                app_state.msg_text = Some("App is running normally.".to_string());
             }
         }
         Err(message) => {
