@@ -37,19 +37,17 @@ pub enum AppStatus {
 #[derive(Debug)]
 struct AppState {
     pub status: AppStatus,
-    pub msg_text: Option<String>,
+    pub msg_text: String,
 }
 
 impl AppState {
     pub fn new() -> Self {
         AppState {
             status: AppStatus::Neutral,
-            msg_text: None,
+            msg_text: "Checking...".to_string(),
         }
     }
 }
-
-fn get_text_renderer(device: &Device, queue: &Queue, swapchain_format: TextureFormat) {}
 
 async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()>) {
     let mut system_try = SystemTry::new();
@@ -65,10 +63,10 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         mut text_renderer,
     ) = configure_wgpu(window).await;
 
-    let mut text_app_header = Buffer::new(&mut font_system, Metrics::new(22.0, 42.0));
-    let mut text_app_version = Buffer::new(&mut font_system, Metrics::new(14.0, 42.0));
-    let mut text_app_status = Buffer::new(&mut font_system, Metrics::new(22.0, 42.0));
-    let mut text_app_message = Buffer::new(&mut font_system, Metrics::new(20.0, 42.0));
+    let mut text_app_header = Buffer::new(&mut font_system, Metrics::new(22.0, 24.0));
+    let mut text_app_version = Buffer::new(&mut font_system, Metrics::new(14.0, 16.0));
+    let mut text_app_status = Buffer::new(&mut font_system, Metrics::new(22.0, 24.0));
+    let mut text_app_message = Buffer::new(&mut font_system, Metrics::new(20.0, 22.0));
 
     let physical_width = window.inner_size().width;
     let physical_height = window.inner_size().height;
@@ -80,7 +78,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     );
     text_app_header.set_text(
         &mut font_system,
-        "Discovery Service for Flight Simulator Host", //👋
+        "Discovery Service for Flight Simulator Host",
         Attrs::new().family(Family::SansSerif).weight(Weight::BOLD),
         Shaping::Advanced,
     );
@@ -89,6 +87,12 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         &mut font_system,
         physical_width as f32,
         physical_height as f32,
+    );
+    text_app_status.set_text(
+        &mut font_system,
+        "Status:",
+        Attrs::new().family(Family::SansSerif),
+        Shaping::Advanced,
     );
     text_app_message.set_size(
         &mut font_system,
@@ -113,42 +117,26 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
 
         let mut text_areas: Vec<TextArea> = Vec::new();
 
-        let status_text = match (&app_state.status) {
-            &AppStatus::Neutral => "Status: PENDING",
-            &AppStatus::Error => "Status: ERROR",
-            &AppStatus::Warning => "Status: WARNED",
-            &AppStatus::Running => "Status: RUNNING",
-        };
-
-        text_app_status.set_text(
+        text_app_message.set_text(
             &mut font_system,
-            status_text,
-            Attrs::new().family(Family::SansSerif),
+            &app_state.msg_text,
+            Attrs::new().family(Family::SansSerif).style(Style::Italic),
             Shaping::Advanced,
         );
 
-        if Option::is_some(&app_state.msg_text) {
-            text_app_message.set_text(
-                &mut font_system,
-                &app_state.msg_text.as_ref().unwrap(),
-                Attrs::new().family(Family::SansSerif).style(Style::Italic),
-                Shaping::Advanced,
-            );
-
-            text_areas.push(TextArea {
-                buffer: &text_app_message,
-                left: 100.0,
-                top: 130.0,
-                scale: 1.0,
-                bounds: TextBounds {
-                    left: 0,
-                    top: 0,
-                    right: physical_width as i32,
-                    bottom: physical_height as i32,
-                },
-                default_color: Color::rgb(220, 220, 220),
-            });
-        }
+        text_areas.push(TextArea {
+            buffer: &text_app_message,
+            left: 100.0,
+            top: 155.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: 0,
+                top: 0,
+                right: physical_width as i32,
+                bottom: physical_height as i32,
+            },
+            default_color: Color::rgb(220, 220, 220),
+        });
 
         text_areas.push(TextArea {
             buffer: &text_app_header,
@@ -167,7 +155,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         text_areas.push(TextArea {
             buffer: &text_app_status,
             left: 100.0,
-            top: 100.0,
+            top: 120.0,
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -181,7 +169,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         text_areas.push(TextArea {
             buffer: &text_app_version,
             left: 520.0,
-            top: 270.0,
+            top: 280.0,
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -253,28 +241,25 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
 
     let is_msfs_running = check_if_msfs_running();
 
-    let update_config_result = update_simconnect_config();
+    let simconnect_config_result = update_simconnect_config();
 
-    match update_config_result {
+    match simconnect_config_result {
         Ok(config) => {
             if (config.is_changed && is_msfs_running) {
                 system_try.set_status(AppStatus::Warning);
                 app_state.status = AppStatus::Warning;
-                app_state.msg_text = Some(
-                    "Configuration has been changed during MSFS2020 runtime.\n
-                    Let's restart Microsoft Flight Simulator 2020."
-                        .to_string(),
-                );
+                app_state.msg_text = "⭕ Run client before simulator is started.".to_string();
             } else {
                 system_try.set_status(AppStatus::Running);
                 app_state.status = AppStatus::Running;
-                app_state.msg_text = Some("App is running normally.".to_string());
+
+                app_state.msg_text = "✅ Client is working normally.".to_string();
             }
         }
-        Err(message) => {
+        Err(_) => {
             system_try.set_status(AppStatus::Error);
             app_state.status = AppStatus::Error;
-            app_state.msg_text = Some(message.clone());
+            app_state.msg_text = format!("🔴 Fatal error during SimConnect configuration.");
         }
     }
 
