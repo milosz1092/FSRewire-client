@@ -24,6 +24,10 @@ use glyphon::{
     TextArea, TextAtlas, TextBounds, TextRenderer, Weight,
 };
 
+use std::net::{SocketAddr, UdpSocket};
+use std::sync::mpsc;
+use std::thread;
+
 pub static APP_TITLE: &str = "FSRewire-client";
 
 #[derive(Debug)]
@@ -48,8 +52,43 @@ impl AppState {
         }
     }
 }
+fn udp_broadcast_thread(sender: mpsc::Sender<String>) {
+    let socket = match UdpSocket::bind("0.0.0.0:0") {
+        Ok(socket) => socket,
+        Err(err) => {
+            sender
+                .send(format!("Failed to bind socket: {}", err))
+                .unwrap();
+            return;
+        }
+    };
+
+    if let Err(err) = socket.set_broadcast(true) {
+        sender
+            .send(format!("Failed to set socket to broadcast mode: {}", err))
+            .unwrap();
+        return;
+    }
+
+    let broadcast_addr = "255.255.255.255:1234";
+
+    let message = "Hello, world!";
+
+    loop {
+        // Send the message and handle errors
+        match socket.send_to(message.as_bytes(), broadcast_addr) {
+            Ok(_) => sender.send("UDP_PACKET_SENT".to_string()).unwrap(),
+            Err(err) => sender
+                .send(format!("Failed to send message: {}", err))
+                .unwrap(),
+        }
+
+        thread::sleep(std::time::Duration::from_secs(5));
+    }
+}
 
 async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()>) {
+    let (udp_sender, udp_receiver) = mpsc::channel();
     let mut system_try = SystemTry::new();
 
     let (
@@ -253,6 +292,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
                 system_try.set_status(AppStatus::Running);
                 app_state.status = AppStatus::Running;
 
+                thread::spawn(move || udp_broadcast_thread(udp_sender));
                 app_state.msg_text = "✅ Client is working normally.".to_string();
             }
         }
@@ -294,6 +334,15 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
 
                 window.focus_window();
             }
+        }
+
+        match udp_receiver.try_recv() {
+            Ok(message) => {
+                println!("Received message from UDP broadcast thread: {}", message);
+                // app_state.msg_text = message;
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => {}
         }
     });
 }
