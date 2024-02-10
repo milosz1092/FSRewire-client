@@ -7,6 +7,8 @@ static UDP_PACKET_PREFIX: &str = "FSR_SMC";
 static UDP_BROADCAST_ADDRESS: &str = "255.255.255.255:1234";
 
 pub fn udp_broadcast_thread(sender: mpsc::Sender<String>, simconnect_port: String) {
+    let mut is_success_sent = false;
+
     let socket = match UdpSocket::bind("0.0.0.0:0") {
         Ok(socket) => socket,
         Err(_) => {
@@ -24,7 +26,12 @@ pub fn udp_broadcast_thread(sender: mpsc::Sender<String>, simconnect_port: Strin
 
     loop {
         match socket.send_to(udp_data.as_bytes(), UDP_BROADCAST_ADDRESS) {
-            Ok(_) => sender.send(UDP_THREAD_STATUS_OK.to_string()).unwrap(),
+            Ok(_) => {
+                if !is_success_sent {
+                    sender.send(UDP_THREAD_STATUS_OK.to_string()).unwrap();
+                    is_success_sent = true;
+                }
+            }
             Err(_) => {
                 sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
                 break;
