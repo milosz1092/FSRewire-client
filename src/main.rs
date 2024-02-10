@@ -29,8 +29,10 @@ use std::sync::mpsc;
 use std::thread;
 
 pub static APP_TITLE: &str = "FSRewire-client";
+pub static UDP_THREAD_STATUS_OK: &str = "udp-ok";
+pub static UDP_THREAD_STATUS_ERROR: &str = "udp-error";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AppStatus {
     Neutral,
     Running,
@@ -56,31 +58,27 @@ fn udp_broadcast_thread(sender: mpsc::Sender<String>) {
     let socket = match UdpSocket::bind("0.0.0.0:0") {
         Ok(socket) => socket,
         Err(err) => {
-            sender
-                .send(format!("Failed to bind socket: {}", err))
-                .unwrap();
+            sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
             return;
         }
     };
 
     if let Err(err) = socket.set_broadcast(true) {
-        sender
-            .send(format!("Failed to set socket to broadcast mode: {}", err))
-            .unwrap();
+        sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
         return;
     }
 
     let broadcast_addr = "255.255.255.255:1234";
-
     let message = "Hello, world!";
 
     loop {
         // Send the message and handle errors
         match socket.send_to(message.as_bytes(), broadcast_addr) {
-            Ok(_) => sender.send("UDP_PACKET_SENT".to_string()).unwrap(),
-            Err(err) => sender
-                .send(format!("Failed to send message: {}", err))
-                .unwrap(),
+            Ok(_) => sender.send(UDP_THREAD_STATUS_OK.to_string()).unwrap(),
+            Err(err) => {
+                sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
+                break;
+            }
         }
 
         thread::sleep(std::time::Duration::from_secs(5));
@@ -88,7 +86,7 @@ fn udp_broadcast_thread(sender: mpsc::Sender<String>) {
 }
 
 async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()>) {
-    let (udp_sender, udp_receiver) = mpsc::channel();
+    let (udp_thread_sender, udp_thread_receiver) = mpsc::channel();
     let mut system_try = SystemTry::new();
 
     let (
@@ -152,8 +150,6 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     );
 
     let mut redraw = |app_state: &AppState| {
-        println!("redraw...{:#?}", app_state);
-
         let mut text_areas: Vec<TextArea> = Vec::new();
 
         text_app_message.set_text(
@@ -287,13 +283,10 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
             if (config.is_changed && is_msfs_running) {
                 system_try.set_status(AppStatus::Warning);
                 app_state.status = AppStatus::Warning;
-                app_state.msg_text = "⭕ Run client before simulator is started.".to_string();
+                app_state.msg_text =
+                    "⭕ Run this client before the simulator is started.".to_string();
             } else {
-                system_try.set_status(AppStatus::Running);
-                app_state.status = AppStatus::Running;
-
-                thread::spawn(move || udp_broadcast_thread(udp_sender));
-                app_state.msg_text = "✅ Client is working normally.".to_string();
+                thread::spawn(move || udp_broadcast_thread(udp_thread_sender));
             }
         }
         Err(_) => {
@@ -313,9 +306,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
                 WindowEvent::CloseRequested => {
                     window.set_visible(false);
                 }
-                WindowEvent::RedrawRequested => {
-                    redraw(&app_state);
-                }
+                WindowEvent::RedrawRequested => {}
                 _ => {}
             }
         }
@@ -336,10 +327,23 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
             }
         }
 
-        match udp_receiver.try_recv() {
+        match udp_thread_receiver.try_recv() {
             Ok(message) => {
-                println!("Received message from UDP broadcast thread: {}", message);
-                // app_state.msg_text = message;
+                if message == UDP_THREAD_STATUS_ERROR {
+                    system_try.set_status(AppStatus::Error);
+                    app_state.status = AppStatus::Error;
+                    app_state.msg_text =
+                        "🔴 Fatal error during configuration data broadcast.".to_string();
+
+                    redraw(&app_state);
+                } else if message == UDP_THREAD_STATUS_OK && app_state.status != AppStatus::Running
+                {
+                    system_try.set_status(AppStatus::Running);
+                    app_state.status = AppStatus::Running;
+                    app_state.msg_text = "✅ Client is working normally.".to_string();
+
+                    redraw(&app_state);
+                }
             }
             Err(mpsc::TryRecvError::Empty) => {}
             Err(mpsc::TryRecvError::Disconnected) => {}
