@@ -58,6 +58,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     let physical_height = window.inner_size().height;
 
     {
+        // text_app_header
         text_app_header.set_size(
             &mut font_system,
             physical_width as f32,
@@ -73,6 +74,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     }
 
     {
+        // text_app_status
         text_app_status.set_size(
             &mut font_system,
             physical_width as f32,
@@ -88,6 +90,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     }
 
     {
+        // text_app_version
         text_app_version.set_size(
             &mut font_system,
             physical_width as f32,
@@ -111,6 +114,30 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     let mut redraw = |app_state: &AppState| {
         let mut text_areas: Vec<TextArea> = Vec::new();
 
+        {
+            // text_app_message
+            text_app_message.set_text(
+                &mut font_system,
+                &app_state.msg_text,
+                Attrs::new().family(Family::SansSerif).style(Style::Italic),
+                Shaping::Advanced,
+            );
+
+            text_areas.push(TextArea {
+                buffer: &text_app_message,
+                left: 100.0,
+                top: 125.0,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: 0,
+                    top: 0,
+                    right: physical_width as i32,
+                    bottom: physical_height as i32,
+                },
+                default_color: Color::rgb(220, 220, 220),
+            });
+        }
+
         text_areas.push(TextArea {
             buffer: &text_app_header,
             left: 75.0,
@@ -128,28 +155,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         text_areas.push(TextArea {
             buffer: &text_app_status,
             left: 100.0,
-            top: 120.0,
-            scale: 1.0,
-            bounds: TextBounds {
-                left: 0,
-                top: 0,
-                right: physical_width as i32,
-                bottom: physical_height as i32,
-            },
-            default_color: Color::rgb(220, 220, 220),
-        });
-
-        text_app_message.set_text(
-            &mut font_system,
-            &app_state.msg_text,
-            Attrs::new().family(Family::SansSerif).style(Style::Italic),
-            Shaping::Advanced,
-        );
-
-        text_areas.push(TextArea {
-            buffer: &text_app_message,
-            left: 100.0,
-            top: 155.0,
+            top: 90.0,
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -163,7 +169,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         text_areas.push(TextArea {
             buffer: &text_app_version,
             left: 520.0,
-            top: 280.0,
+            top: 220.0,
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -322,7 +328,7 @@ fn main() {
         .with_visible(false)
         .with_inner_size(PhysicalSize {
             width: 600,
-            height: 300,
+            height: 240,
         })
         .with_position(PhysicalPosition { x: 200, y: 200 })
         .with_enabled_buttons(WindowButtons::MINIMIZE.union(WindowButtons::CLOSE))
