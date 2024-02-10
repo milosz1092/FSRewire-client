@@ -1,18 +1,12 @@
-use local_ip_address::local_ip;
 use std::{net::UdpSocket, sync::mpsc, thread, time::Duration};
 
 pub static UDP_THREAD_STATUS_OK: &str = "udp-ok";
 pub static UDP_THREAD_STATUS_ERROR: &str = "udp-error";
 
-pub fn udp_broadcast_thread(sender: mpsc::Sender<String>, simconnect_port: String) {
-    let local_ip_address = match local_ip() {
-        Ok(ip_address) => ip_address,
-        Err(_) => {
-            sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
-            return;
-        }
-    };
+static UDP_PACKET_PREFIX: &str = "FSR_SMC";
+static UDP_BROADCAST_ADDRESS: &str = "255.255.255.255:1234";
 
+pub fn udp_broadcast_thread(sender: mpsc::Sender<String>, simconnect_port: String) {
     let socket = match UdpSocket::bind("0.0.0.0:0") {
         Ok(socket) => socket,
         Err(_) => {
@@ -26,10 +20,10 @@ pub fn udp_broadcast_thread(sender: mpsc::Sender<String>, simconnect_port: Strin
         return;
     }
 
-    let udp_data = format!("FSR_{}:{}", local_ip_address, simconnect_port);
+    let udp_data = format!("{}:{}", UDP_PACKET_PREFIX, simconnect_port);
 
     loop {
-        match socket.send_to(udp_data.as_bytes(), "255.255.255.255:1234") {
+        match socket.send_to(udp_data.as_bytes(), UDP_BROADCAST_ADDRESS) {
             Ok(_) => sender.send(UDP_THREAD_STATUS_OK.to_string()).unwrap(),
             Err(_) => {
                 sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
@@ -37,6 +31,6 @@ pub fn udp_broadcast_thread(sender: mpsc::Sender<String>, simconnect_port: Strin
             }
         }
 
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(10));
     }
 }
