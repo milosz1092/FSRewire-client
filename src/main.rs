@@ -2,98 +2,47 @@
 #![allow(unused)]
 
 mod schema;
+mod state;
 mod ui;
 mod utils;
 
-use ui::icons::get_window_icon;
-use ui::system_try::{SystemTry, MENU_ITEM_EXIT_ID, MENU_ITEM_STATUS_ID};
-use utils::simconnect::update_simconnect_config;
-use utils::{msfs::check_if_msfs_running, wgpu::configure_wgpu};
+use ui::{
+    icons::get_window_icon,
+    system_try::{SystemTry, MENU_ITEM_EXIT_ID, MENU_ITEM_STATUS_ID},
+};
+use utils::{
+    msfs::check_if_msfs_running,
+    simconnect::update_simconnect_config,
+    udp::{udp_broadcast_thread, UDP_THREAD_STATUS_ERROR, UDP_THREAD_STATUS_OK},
+    wgpu::configure_wgpu,
+};
 
 use tray_icon::menu::MenuEvent;
-use wgpu::{Device, MultisampleState, Queue, Surface, TextureFormat};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
-    window::{Icon, Theme, Window, WindowBuilder, WindowButtons},
+    window::{Theme, Window, WindowBuilder, WindowButtons},
 };
 
 use glyphon::{
-    Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, Style, SwashCache,
-    TextArea, TextAtlas, TextBounds, TextRenderer, Weight,
+    Attrs, Buffer, Color, Family, Metrics, Resolution, Shaping, Style, TextArea, TextBounds, Weight,
 };
 
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::mpsc;
-use std::thread;
+use std::{sync::mpsc, thread};
+
+use crate::state::{AppState, AppStatus};
 
 pub static APP_TITLE: &str = "FSRewire-client";
-pub static UDP_THREAD_STATUS_OK: &str = "udp-ok";
-pub static UDP_THREAD_STATUS_ERROR: &str = "udp-error";
-
-#[derive(Debug, PartialEq)]
-pub enum AppStatus {
-    Neutral,
-    Running,
-    Warning,
-    Error,
-}
-
-#[derive(Debug)]
-struct AppState {
-    pub status: AppStatus,
-    pub msg_text: String,
-}
-
-impl AppState {
-    pub fn new() -> Self {
-        AppState {
-            status: AppStatus::Neutral,
-            msg_text: "Checking...".to_string(),
-        }
-    }
-}
-fn udp_broadcast_thread(sender: mpsc::Sender<String>) {
-    let socket = match UdpSocket::bind("0.0.0.0:0") {
-        Ok(socket) => socket,
-        Err(err) => {
-            sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
-            return;
-        }
-    };
-
-    if let Err(err) = socket.set_broadcast(true) {
-        sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
-        return;
-    }
-
-    let broadcast_addr = "255.255.255.255:1234";
-    let message = "Hello, world!";
-
-    loop {
-        // Send the message and handle errors
-        match socket.send_to(message.as_bytes(), broadcast_addr) {
-            Ok(_) => sender.send(UDP_THREAD_STATUS_OK.to_string()).unwrap(),
-            Err(err) => {
-                sender.send(UDP_THREAD_STATUS_ERROR.to_string()).unwrap();
-                break;
-            }
-        }
-
-        thread::sleep(std::time::Duration::from_secs(5));
-    }
-}
 
 async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()>) {
-    let (udp_thread_sender, udp_thread_receiver) = mpsc::channel();
     let mut system_try = SystemTry::new();
+    let (udp_thread_sender, udp_thread_receiver) = mpsc::channel();
 
     let (
         device,
         queue,
         viewport,
-        swapchain_format,
         mut font_system,
         mut swash_cache,
         mut text_atlas,
@@ -108,70 +57,59 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
     let physical_width = window.inner_size().width;
     let physical_height = window.inner_size().height;
 
-    text_app_header.set_size(
-        &mut font_system,
-        physical_width as f32,
-        physical_height as f32,
-    );
-    text_app_header.set_text(
-        &mut font_system,
-        "Discovery Service for Flight Simulator Host",
-        Attrs::new().family(Family::SansSerif).weight(Weight::BOLD),
-        Shaping::Advanced,
-    );
+    {
+        text_app_header.set_size(
+            &mut font_system,
+            physical_width as f32,
+            physical_height as f32,
+        );
+        text_app_header.set_text(
+            &mut font_system,
+            "Discovery Service for Flight Simulator Host",
+            Attrs::new().family(Family::SansSerif).weight(Weight::BOLD),
+            Shaping::Advanced,
+        );
+        text_app_header.set_redraw(false);
+    }
 
-    text_app_status.set_size(
-        &mut font_system,
-        physical_width as f32,
-        physical_height as f32,
-    );
-    text_app_status.set_text(
-        &mut font_system,
-        "Status:",
-        Attrs::new().family(Family::SansSerif),
-        Shaping::Advanced,
-    );
+    {
+        text_app_status.set_size(
+            &mut font_system,
+            physical_width as f32,
+            physical_height as f32,
+        );
+        text_app_status.set_text(
+            &mut font_system,
+            "Status:",
+            Attrs::new().family(Family::SansSerif),
+            Shaping::Advanced,
+        );
+        text_app_status.set_redraw(false);
+    }
+
+    {
+        text_app_version.set_size(
+            &mut font_system,
+            physical_width as f32,
+            physical_height as f32,
+        );
+        text_app_version.set_text(
+            &mut font_system,
+            "ver 0.1.0",
+            Attrs::new().family(Family::Monospace),
+            Shaping::Advanced,
+        );
+        text_app_version.set_redraw(false);
+    }
+
     text_app_message.set_size(
         &mut font_system,
         physical_width as f32,
         physical_height as f32,
     );
 
-    text_app_version.set_size(
-        &mut font_system,
-        physical_width as f32,
-        physical_height as f32,
-    );
-    text_app_version.set_text(
-        &mut font_system,
-        "ver 1.0.3",
-        Attrs::new().family(Family::Monospace),
-        Shaping::Advanced,
-    );
-
     let mut redraw = |app_state: &AppState| {
         let mut text_areas: Vec<TextArea> = Vec::new();
-
-        text_app_message.set_text(
-            &mut font_system,
-            &app_state.msg_text,
-            Attrs::new().family(Family::SansSerif).style(Style::Italic),
-            Shaping::Advanced,
-        );
-
-        text_areas.push(TextArea {
-            buffer: &text_app_message,
-            left: 100.0,
-            top: 155.0,
-            scale: 1.0,
-            bounds: TextBounds {
-                left: 0,
-                top: 0,
-                right: physical_width as i32,
-                bottom: physical_height as i32,
-            },
-            default_color: Color::rgb(220, 220, 220),
-        });
 
         text_areas.push(TextArea {
             buffer: &text_app_header,
@@ -191,6 +129,27 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
             buffer: &text_app_status,
             left: 100.0,
             top: 120.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: 0,
+                top: 0,
+                right: physical_width as i32,
+                bottom: physical_height as i32,
+            },
+            default_color: Color::rgb(220, 220, 220),
+        });
+
+        text_app_message.set_text(
+            &mut font_system,
+            &app_state.msg_text,
+            Attrs::new().family(Family::SansSerif).style(Style::Italic),
+            Shaping::Advanced,
+        );
+
+        text_areas.push(TextArea {
+            buffer: &text_app_message,
+            left: 100.0,
+            top: 155.0,
             scale: 1.0,
             bounds: TextBounds {
                 left: 0,
@@ -306,7 +265,6 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
                 WindowEvent::CloseRequested => {
                     window.set_visible(false);
                 }
-                WindowEvent::RedrawRequested => {}
                 _ => {}
             }
         }
@@ -332,8 +290,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
                 if message == UDP_THREAD_STATUS_ERROR {
                     system_try.set_status(AppStatus::Error);
                     app_state.status = AppStatus::Error;
-                    app_state.msg_text =
-                        "🔴 Fatal error during configuration data broadcast.".to_string();
+                    app_state.msg_text = "🔴 Fatal error during data broadcasting.".to_string();
 
                     redraw(&app_state);
                 } else if message == UDP_THREAD_STATUS_OK && app_state.status != AppStatus::Running
@@ -345,8 +302,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
                     redraw(&app_state);
                 }
             }
-            Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => {}
+            _ => {}
         }
     });
 }
