@@ -251,7 +251,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
                 app_state.msg_text =
                     "⭕ Run this client before the simulator is started.".to_string();
             } else {
-                thread::spawn(move || udp_broadcast_thread(udp_thread_sender));
+                thread::spawn(move || udp_broadcast_thread(udp_thread_sender, config.port));
             }
         }
         Err(_) => {
