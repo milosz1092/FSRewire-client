@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(unused)]
 
+include!("./env.rs");
+
 mod schema;
 mod state;
 mod ui;
@@ -98,7 +100,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
         );
         text_app_version.set_text(
             &mut font_system,
-            "ver 0.1.0",
+            RELESE_TAG,
             Attrs::new().family(Family::Monospace),
             Shaping::Advanced,
         );
@@ -168,7 +170,7 @@ async fn run(window: &Window, app_state: &mut AppState, event_loop: EventLoop<()
 
         text_areas.push(TextArea {
             buffer: &text_app_version,
-            left: 520.0,
+            left: 480.0,
             top: 220.0,
             scale: 1.0,
             bounds: TextBounds {

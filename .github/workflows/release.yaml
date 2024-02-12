@@ -4,6 +4,7 @@ on:
 
 jobs:
   release:
+    permissions: write-all
     name: release ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
@@ -13,7 +14,11 @@ jobs:
           - target: x86_64-pc-windows-gnu
             archive: zip
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
+      - name: Generate file with environment variable
+        run: |
+          sed -i 's/dev/${{ github.event.release.tag_name }}/' src/env.rs
+
       - name: Compile and release
         uses: rust-build/rust-build.action@v1.4.4
         env:

@@ -1,5 +1,8 @@
 use encoding::{DecoderTrap, EncoderTrap};
+use image::codecs::png::PngDecoder;
+use image::{load_from_memory, GenericImageView, ImageDecoder};
 use std::fs;
+use std::io::{Cursor, Read};
 use std::path::Path;
 use tray_icon::Icon as TryIcon;
 use winit::window::Icon as WindowIcon;
@@ -23,21 +26,26 @@ pub fn write_windows1252_file(file_path: &str, content: &str) -> Result<(), Stri
     }
 }
 
-fn load_icon_file(path: &std::path::Path) -> (Vec<u8>, u32, u32) {
-    let image = image::open(path)
-        .expect("Failed to open icon path")
-        .into_rgba8();
-    let (width, height) = image.dimensions();
-    let rgba = image.into_raw();
-    (rgba, width, height)
+fn load_png(png_icon_data: &'static [u8]) -> (Vec<u8>, u32, u32) {
+    let cursor = Cursor::new(png_icon_data);
+    let dynamic_image = load_from_memory(&cursor.into_inner()).unwrap();
+
+    let (width, height) = dynamic_image.dimensions();
+
+    // Convert the image to RGBA format
+    let rgba_image = dynamic_image.to_rgba8();
+
+    // Extract RGBA bytes into a Vec<u8>
+    let rgba_data = rgba_image.into_raw();
+    (rgba_data, width, height)
 }
 
-pub fn load_try_icon(path: &std::path::Path) -> TryIcon {
-    let (icon_rgba, icon_width, icon_height) = load_icon_file(path);
+pub fn load_try_icon(png_icon_data: &'static [u8]) -> TryIcon {
+    let (icon_rgba, icon_width, icon_height) = load_png(png_icon_data);
     TryIcon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open try icon")
 }
 
-pub fn load_window_icon(path: &Path) -> WindowIcon {
-    let (icon_rgba, icon_width, icon_height) = load_icon_file(path);
+pub fn load_window_icon(png_icon_data: &'static [u8]) -> WindowIcon {
+    let (icon_rgba, icon_width, icon_height) = load_png(png_icon_data);
     WindowIcon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open window icon")
 }
