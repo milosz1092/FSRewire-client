@@ -1,8 +1,8 @@
 <img src="https://github.com/milosz1092/FSRewire-client/blob/main/static/window_icon.png?raw=true" alt="FSRewire-logo" style="width:20px;height:20px;" />[![Release](https://github.com/milosz1092/FSRewire-client/actions/workflows/release.yaml/badge.svg)](https://github.com/milosz1092/FSRewire-client/actions/workflows/release.yaml)
 
-# FSRewire-client ✈️
+# FSRewire-client
 
-This application serves as a discovery service for identifying Microsoft Flight Simulator host.
+This application serves as a discovery service for identifying **Microsoft Flight Simulator** host.
 
 ## Features
 
